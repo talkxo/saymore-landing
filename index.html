@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saymore — hold a button. say the thing.</title>
+<meta name="description" content="Saymore types your words, formatted, wherever your cursor is. Runs entirely on your Mac — 22 MB, no cloud, no telemetry.">
+<link rel="icon" type="image/png" href="assets/favicon.png?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #fbf5e9;
+    --ink: #23201a;
+    --dim: #6f6557;
+    --faint: #a89b88;
+    --line: rgba(35, 32, 26, 0.12);
+    --surface: #fffdf7;
+    --shadow: rgba(35, 32, 26, 0.9);
+    --kbd-bg: #fffdf7;
+    --kbd-shadow: rgba(251, 245, 233, 0.25);
+    --amber: #f2c14e;
+    --amber-deep: #d99a1c;
+    --pink: #e8578a;
+    --maroon: #7a2e3f;
+    --pill-ease: cubic-bezier(0.34, 1.3, 0.4, 1);
+    color-scheme: light dark;
+  }
+
+  /* ── dark theme: same soul, night ink ── */
+  [data-theme="dark"] {
+    --paper: #171512;
+    --ink: #f0e9db;
+    --dim: #a89e8e;
+    --faint: #6f6557;
+    --line: rgba(240, 233, 219, 0.13);
+    --surface: #201d19;
+    --shadow: rgba(0, 0, 0, 0.6);
+    --amber: #f2c14e;
+    --amber-deep: #f2c14e;
+    --pink: #f07aa4;
+    --maroon: #f0b7a0;
+    --kbd-bg: #24211c;
+    --kbd-shadow: rgba(0, 0, 0, 0.4);
+  }
+
+  /* pixel-hearts artwork is already transparent — it renders as-is in dark */
+  [data-theme="dark"] .song-card {
+    background: var(--surface);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: var(--amber); color: var(--ink); }
+
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 28px; }
+
+  .px { font-family: "Silkscreen", monospace; letter-spacing: 0.06em; }
+
+  .kicker { font-size: 11px; color: var(--pink); }
+
+  /* ── first fold: at least one viewport — nav + hero + hearts + marquee ── */
+  .fold { min-height: 100svh; display: flex; flex-direction: column; }
+  .fold-inner { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; width: 100%; }
+
+  /* ── nav ── */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0 0; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand img { height: 34px; width: auto; } /* sharp edges — the logo is pixel art, never round it */
+  .brand b { font-size: 18px; letter-spacing: -0.02em; }
+  .nav-alpha { font-size: 10px; color: var(--maroon); }
+
+  /* ── hero ── */
+  .hero { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; padding: 12px 0 6px; }
+
+  .hero h1 {
+    font-size: clamp(40px, 6vw, 68px);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 1.04;
+  }
+  /* a proper underline, in brand amber */
+  .hero h1 .accent {
+    white-space: nowrap;
+    text-decoration: underline;
+    text-decoration-color: var(--amber);
+    text-decoration-thickness: 0.055em;
+    text-underline-offset: 0.13em;
+  }
+
+  .hero .sub {
+    margin: 26px auto 0; max-width: 540px;
+    font-size: 17px; line-height: 1.55; color: var(--dim);
+  }
+  .hero .sub b { color: var(--ink); }
+
+  .req-line { margin-top: 26px; font-size: 13.5px; color: var(--faint); }
+  .req-line b { color: var(--dim); font-weight: 600; }
+
+  .field-zone { display: flex; justify-content: center; margin: 38px 0 0; min-height: 58px; }
+  .dl-btn-big {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--ink); color: var(--paper);
+    border: none; border-radius: 999px;
+    height: 56px; padding: 0 30px;
+    font: inherit; font-size: 16.5px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+    transition: transform 0.2s var(--pill-ease), background 0.3s ease, color 0.3s ease;
+  }
+  .dl-btn-big:hover { transform: translateY(-2px); }
+  .dl-btn-big:active { transform: translateY(1px); }
+  .dl-btn-big svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .dl-btn-big.done { background: #7fc98f; color: #12331a; cursor: default; transform: none; }
+  .field-hint {
+    text-align: center; font-size: 13px; color: var(--faint);
+    margin-top: 14px; min-height: 18px;
+  }
+
+  /* ── hearts band (the onboarding signature) ── */
+  .hearts-band {
+    display: block; width: 100vw;
+    margin-left: calc(50% - 50vw);
+    user-select: none; pointer-events: none;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 12%);
+            mask-image: linear-gradient(to bottom, transparent, black 12%);
+  }
+  /* the fold's band: full-width, bottom-anchored, top dissolves into the paper */
+  .hearts-fold {
+    flex: none;
+    display: block;
+    width: 100%;
+    height: clamp(180px, 28svh, 340px);
+    object-fit: cover;
+    object-position: center bottom;
+    -webkit-mask-image: linear-gradient(to top, black 52%, transparent 97%);
+            mask-image: linear-gradient(to top, black 52%, transparent 97%);
+  }
+
+  /* ── marquee ── */
+  .marquee {
+    border-top: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+    background: var(--amber);
+    overflow: hidden; white-space: nowrap;
+    padding: 13px 0;
+  }
+  .marquee-track { display: inline-flex; animation: slide 28s linear infinite; }
+  .marquee span { font-size: 12px; color: #7a2e3f; margin-right: 56px; }
+  @keyframes slide { to { transform: translateX(-50%); } }
+
+  /* ── section scaffolding ── */
+  section { padding: 150px 0 0; }
+  .sec-head { text-align: center; }
+  .sec-head h2 {
+    font-size: clamp(32px, 5vw, 52px); font-weight: 800;
+    letter-spacing: -0.035em; margin-top: 14px;
+  }
+  .sec-head .lede {
+    color: var(--dim); font-size: 16.5px; line-height: 1.55;
+    margin: 16px auto 0; max-width: 520px;
+  }
+
+  /* ── the reflex — the signature dark panel: stays dark in both themes ── */
+  .reflex {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    min-height: 100svh;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    background: #1c1915; color: #fbf5e9;
+    padding: 96px 28px;
+    text-align: center;
+  }
+  [data-theme="dark"] .reflex { background: #14120f; }
+  /* headline rolls up into view when the section arrives */
+  .roll-line { display: block; overflow: hidden; padding: 0.06em 0; }
+  .roll-in { display: inline-block; transform: translateY(120%); transition: transform 1s var(--pill-ease); }
+  .reflex.rolled .roll-in { transform: none; }
+  .reflex.rolled .roll-line:nth-child(2) .roll-in { transition-delay: 0.14s; }
+  .reflex .kicker { color: var(--amber); }
+  .reflex h2 {
+    font-size: clamp(34px, 5.4vw, 58px); font-weight: 800;
+    letter-spacing: -0.035em; margin-top: 16px;
+  }
+  .reflex .reflex-sub {
+    color: rgba(251, 245, 233, 0.65); font-size: 16px; line-height: 1.6;
+    max-width: 520px; margin: 18px auto 0;
+  }
+  .reflex .reflex-sub b { color: var(--amber); font-weight: 600; }
+  .hold-key {
+    display: inline-flex; align-items: center; gap: 9px;
+    margin-top: 38px;
+    background: #fbf5e9; color: #23201a;
+    border: 1.5px solid #23201a; border-radius: 14px;
+    font-size: 16px; font-weight: 700;
+    padding: 15px 26px;
+    box-shadow: 0 5px 0 var(--kbd-shadow, rgba(251, 245, 233, 0.25));
+    cursor: pointer; user-select: none; -webkit-user-select: none;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    touch-action: none;
+  }
+  .hold-key.holding { transform: translateY(4px); box-shadow: 0 1px 0 var(--kbd-shadow, rgba(251, 245, 233, 0.25)); }
+  .hold-key kbd {
+    background: #fff; border: 1.5px solid rgba(35, 32, 26, 0.18);
+    border-radius: 6px; padding: 2px 9px; font-family: inherit; font-size: 14px;
+  }
+  .fake-pill {
+    width: fit-content;
+    height: 62px; min-width: 210px;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px; padding: 0 30px;
+    margin: 0 auto 42px;
+    opacity: 0; transform: scale(0.6);
+    transition: opacity 0.25s ease, transform 0.35s var(--pill-ease);
+  }
+  .fake-pill.on { opacity: 1; transform: scale(1); }
+  .fake-pill i { width: 4px; border-radius: 3px; background: var(--paper); height: 8px; }
+  .fake-pill.on i { animation: wave 0.9s ease-in-out infinite; }
+  .fake-pill i:nth-child(1) { animation-delay: 0s; }
+  .fake-pill i:nth-child(2) { animation-delay: 0.12s; }
+  .fake-pill i:nth-child(3) { animation-delay: 0.24s; }
+  .fake-pill i:nth-child(4) { animation-delay: 0.36s; }
+  .fake-pill i:nth-child(5) { animation-delay: 0.48s; }
+  @keyframes wave { 0%, 100% { height: 8px; } 50% { height: 28px; } }
+  /* after dictation: the pill gives one subtle shimmer, then pops away */
+  .fake-pill.processing { animation: pillshim 1s ease-in-out; }
+  .fake-pill.processing i { animation: none; height: 5px; opacity: 0.55; }
+  @keyframes pillshim { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+  /* the stage: fixed height so the layout never jumps while content changes */
+  .stage {
+    width: 100%;
+    height: 380px;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    margin-top: 6px;
+  }
+  /* one centered column for the words + the change note */
+  .doc { width: min(640px, 100%); text-align: center; position: relative; }
+  .typed-line {
+    margin: 0; min-height: 96px;
+    font-size: 16px; line-height: 1.65; color: #fbf5e9;
+  }
+  .typed-line .caret {
+    display: inline-block; width: 2px; height: 1.05em;
+    background: var(--amber); vertical-align: text-bottom;
+    animation: blink 0.8s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.25; } }
+  /* amber replacements condense in as their dust arrives */
+  .fix-in {
+    color: var(--amber); font-weight: 600;
+    border-bottom: 2px solid rgba(242, 193, 78, 0.55);
+    padding: 0 1px;
+    opacity: 0;
+    transition: opacity 0.45s ease 0.1s;
+  }
+  .fix-in.show { opacity: 1; }
+  /* the changes, as one quiet caption line */
+  .diff-legend {
+    margin: 34px 0 0; text-align: center;
+    font-size: 12.5px; letter-spacing: 0.02em;
+    color: rgba(251, 245, 233, 0.45);
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 0.7s ease, transform 0.7s var(--pill-ease);
+  }
+  .diff-legend.show { opacity: 1; transform: none; }
+  .diff-legend b { color: var(--amber); font-weight: 600; }
+
+  /* ── numbers — plain stats ── */
+  .nums h2 { word-spacing: 0.14em; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; margin-top: 72px; text-align: center; }
+  .stat .v { font-size: clamp(38px, 4.8vw, 58px); font-weight: 800; letter-spacing: -0.03em; }
+  .stat .v small { font-size: 0.45em; font-weight: 700; color: var(--pink); margin-left: 2px; }
+  .stat .l { font-size: 13.5px; line-height: 1.5; color: var(--dim); max-width: 230px; margin: 10px auto 0; }
+
+  /* ── the nerdy bits — quiet definition list ── */
+  .tech-list { max-width: 700px; margin: 64px auto 0; text-align: left; }
+  .tech-row {
+    display: grid; grid-template-columns: 190px 1fr; gap: 24px;
+    padding: 26px 0; border-top: 1px solid var(--line);
+  }
+  .tech-row:last-child { border-bottom: 1px solid var(--line); }
+  .tech-row .t { font-size: 10px; color: var(--pink); padding-top: 5px; }
+  .tech-row p { font-size: 15px; line-height: 1.65; color: var(--dim); }
+  .tech-row p b {
+    font-weight: 400; color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--pink);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+  }
+
+  /* ── footer ── */
+  footer { margin-top: 150px; }
+  footer .hearts-band {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 24%);
+            mask-image: linear-gradient(to bottom, transparent 0%, black 24%);
+  }
+  .foot-note {
+    text-align: center; font-size: 12.5px; color: var(--maroon);
+    padding-bottom: 36px;
+  }
+  .foot-note b { color: var(--ink); }
+  .foot-note .px { font-size: 10px; display: block; margin-top: 8px; color: rgba(122, 46, 63, 0.8); }
+  .theme-switch { display: block; margin-top: 26px; }
+  .theme-btn {
+    background: none; border: none; padding: 0;
+    font: inherit; cursor: pointer;
+    color: rgba(122, 46, 63, 0.55);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+    transition: color 0.2s ease, text-decoration-color 0.2s ease;
+  }
+  .theme-btn:hover { color: var(--maroon); }
+  .theme-btn.active { color: var(--maroon); text-decoration-color: var(--maroon); }
+  [data-theme="dark"] .theme-btn { color: rgba(240, 233, 219, 0.45); }
+  [data-theme="dark"] .theme-btn:hover { color: var(--ink); }
+  [data-theme="dark"] .theme-btn.active { color: var(--amber); text-decoration-color: var(--amber); }
+
+  /* reveal on scroll */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.7s ease, transform 0.7s var(--pill-ease); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ── footer song (click-to-play, modern soft) ── */
+  .song-block { width: min(520px, 100%); margin: 0 auto 32px; text-align: center; }
+  .song-title { font-size: 9px; color: var(--pink); }
+  .song-line { font-size: 13.5px; line-height: 1.55; color: var(--dim); margin-top: 10px; }
+  .song-line b { color: var(--ink); }
+  .song-embed { margin-top: 18px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  .song-embed iframe { display: block; width: 100%; height: 152px; border: 0; }
+
+  @media (max-width: 760px) {
+    section { padding: 110px 0 0; }
+    .reflex { padding: 80px 20px; }
+    .stage { height: 400px; }
+    .fake-pill { margin: 0 auto 28px; }
+    .stats { grid-template-columns: 1fr; gap: 44px; }
+    .tech-row { grid-template-columns: 1fr; gap: 8px; padding: 20px 0; }
+    .hold-key kbd { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .reveal { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="fold">
+<div class="wrap fold-inner">
+
+  <nav>
+    <div class="brand">
+      <img src="assets/logo.png?v=2" alt="Saymore logo">
+      <b>Saymore</b>
+    </div>
+    <div class="nav-alpha px">PRIVATE ALPHA · V1.0.2</div>
+  </nav>
+
+  <!-- ═══════════ hero ═══════════ -->
+  <div class="hero">
+    <h1 class="reveal">Hold a button,<br>say <span class="accent">the thing</span>.</h1>
+    <p class="sub reveal">
+      Saymore is a <b>light &amp; powerful macOS dictation app</b>, made for performance
+      and privacy. Hold a hotkey, talk — Better Formatting does the rest.
+      No cloud. No telemetry.
+    </p>
+
+    <p class="req-line reveal">For <b>Apple Silicon</b> Macs (M1+) · macOS 14 or newer · free while in alpha</p>
+
+    <div class="field-zone reveal">
+      <button class="dl-btn-big" id="dlBtn" type="button">
+        <svg id="dlIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/>
+        </svg>
+        <span id="dlLabel">Download for Mac</span>
+      </button>
+    </div>
+    <p class="field-hint reveal" id="dlHint">one click — the alpha (22&nbsp;MB) lands straight in your Downloads.</p>
+  </div>
+</div>
+
+  <img class="hearts-band hearts-fold" src="assets/hearts.png" alt="" aria-hidden="true">
+
+  <!-- ═══════════ marquee ═══════════ -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track px" id="marqueeTrack">
+      <span>♥ runs on your mac</span><span>♥ no telemetry</span><span>♥ works offline</span>
+      <span>♥ learns your words</span><span>♥ 22 mb app</span><span>♥ no cloud</span>
+      <span>♥ hold to talk</span><span>♥ your mac, your business</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ the reflex — try it right here ═══════════ -->
+<div class="reflex">
+  <div class="kicker px">TRY IT RIGHT HERE</div>
+  <h2>
+    <span class="roll-line"><span class="roll-in">Hold to talk.</span></span>
+    <span class="roll-line"><span class="roll-in">That's the whole app.</span></span>
+  </h2>
+  <p class="reflex-sub reveal">
+    <b>Press and hold</b> — the words type out as you talk. Let go and they freeze;
+    hold again and they continue. At the end, watch the corrections happen.
+    That's the entire product.
+  </p>
+  <div class="stage">
+    <div class="fake-pill" id="fakePill" aria-hidden="true">
+      <i></i><i></i><i></i><i></i><i></i>
+    </div>
+    <div class="doc">
+      <div class="typed-line reveal" id="typedLine">…nothing yet. go on, hold the key.</div>
+      <p class="diff-legend" id="diffLegend">
+        fillers dropped&ensp;·&ensp;"hey" → <b>Hey</b>&ensp;·&ensp;"two thirty" → <b>2:30</b>&ensp;·&ensp;punctuation cleaned
+      </p>
+    </div>
+  </div>
+  <div class="hold-key reveal" id="holdKey" tabindex="0" role="button" aria-label="Hold to simulate dictation">
+    Hold <kbd>⌥</kbd><kbd>Space</kbd>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ═══════════ numbers ═══════════ -->
+  <section class="nums">
+    <div class="sec-head reveal">
+      <div class="kicker px">SMALL APP. BIG BRAIN.</div>
+      <h2>Honest numbers.<br>Plus, zero telemetry.</h2>
+    </div>
+    <div class="stats">
+      <div class="stat reveal">
+        <div class="v">&lt;0.5<small>sec</small></div>
+        <div class="l">median voice → text, measured on a real Mac.</div>
+      </div>
+      <div class="stat reveal">
+        <div class="v">22<small>MB</small></div>
+        <div class="l">the entire app. fits through any door.</div>
+      </div>
+      <div class="stat reveal">
+        <div class="v">~1<small>GB</small></div>
+        <div class="l">of top-ranked open models, downloaded once, then fully offline.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ the nerdy bits ═══════════ -->
+  <section class="tech">
+    <div class="sec-head reveal">
+      <div class="kicker px">THE BORING (GOOD) STUFF</div>
+      <h2>The nerdy bits, for the record.</h2>
+    </div>
+    <div class="tech-list">
+      <div class="tech-row reveal">
+        <div class="t px">MADE FOR APPLE SILICON</div>
+        <p>Native Swift, menu-bar first, <b>deeply integrated into macOS</b>.
+        <b>22&nbsp;MB, no Electron, no bloat.</b></p>
+      </div>
+      <div class="tech-row reveal">
+        <div class="t px">SPEECH → TEXT</div>
+        <p><b>Parakeet v3</b> by NVIDIA — <b>tops the Open ASR Leaderboard</b>. Its TDT decoder
+        runs <b>~1,000× faster than real time</b>, beating Whisper on accuracy.</p>
+      </div>
+      <div class="tech-row reveal">
+        <div class="t px">BETTER FORMATTING</div>
+        <p>Powered by <b>S1 mini</b> by Superwhisper — tiny, purpose-built, best in class
+        at a <b>fraction of the 4–6&nbsp;GB</b> models other apps lean on. The rules we wrap
+        around it never rewrite your words — they only get the formatting right. Every time.</p>
+      </div>
+      <div class="tech-row reveal">
+        <div class="t px">ON-DEVICE ENGINE</div>
+        <p>Both models run through <b>Core ML on Apple's Neural Engine</b>, compiled for
+        Apple Silicon. Fastest results, lowest memory, easiest on the battery.</p>
+      </div>
+      <div class="tech-row reveal">
+        <div class="t px">ONE-TIME SETUP</div>
+        <p>The two models above — <b>the brain files, ~1&nbsp;GB</b> — download once from
+        Hugging Face. Then fully offline — flight mode ✈️ included.</p>
+      </div>
+      <div class="tech-row reveal">
+        <div class="t px">PRIVACY FIRST</div>
+        <p>Audio, text, and history <b>never leave your Mac</b>. No telemetry, no tracking,
+        no account.</p>
+      </div>
+      <div class="tech-row reveal">
+        <div class="t px">ICLOUD SYNC</div>
+        <p><b>Completely optional.</b> Your custom dictionary syncs through <b>the iCloud
+        account on your Mac</b> — built for multi-Mac setups. Nothing in between. No us.</p>
+      </div>
+      <div class="tech-row reveal">
+        <div class="t px">CREDITS</div>
+        <p>Pixel icons by <b>Magnific — Flaticon</b>. Models by their open authors.
+        <br>And a credit to you — for choosing to run AI locally on your Mac, and believing
+        in private, local apps.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ footer ═══════════ -->
+  <footer>
+    <div class="song-block">
+      <p class="song-title px">SHE'S LEAVING HOME · THE BEATLES</p>
+      <p class="song-line">The Beatles inspire everything we make — and the name Saymore
+      is an <b>afterthought from this very song</b>.</p>
+      <div class="song-embed">
+        <iframe width="100%" height="152"
+          src="https://open.spotify.com/embed/track/3PjMtNzwhDHqxoKudm6GvF?utm_source=generator&theme=0"
+          title="She's Leaving Home — The Beatles" frameborder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"></iframe>
+      </div>
+    </div>
+    <div class="foot-note">
+      © 2026 <b>XO Playground</b> — Saymore is a private alpha; it may hiccup, it won't snoop.
+      <span class="theme-switch px">
+        <button class="theme-btn" data-set="light">light</button> ·
+        <button class="theme-btn" data-set="auto">auto</button> ·
+        <button class="theme-btn" data-set="dark">dark</button>
+      </span>
+    </div>
+    <img class="hearts-band" src="assets/hearts.png" alt="" aria-hidden="true">
+  </footer>
+</div>
+
+<script>
+  /* ── marquee: build one unit at least viewport-wide, then double it.
+     Margins live on the spans (not flex gap) so both halves are
+     pixel-identical and the -50% loop never shows a seam. ── */
+  const track = document.getElementById("marqueeTrack");
+  const base = track.innerHTML;
+  let unit = base;
+  track.innerHTML = unit;
+  while (track.scrollWidth < innerWidth) { unit += base; track.innerHTML = unit; }
+  track.innerHTML = unit + unit;
+
+  /* ── download: one click, no forms ── */
+  const dlBtn = document.getElementById("dlBtn");
+  const dlLabel = document.getElementById("dlLabel");
+  const dlIcon = document.getElementById("dlIcon");
+  const hint = document.getElementById("dlHint");
+  let downloading = false;
+
+  dlBtn.addEventListener("click", () => {
+    if (downloading) return;
+    downloading = true;
+
+    const a = document.createElement("a");
+    a.href = "Saymore.zip";
+    a.download = "Saymore.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    dlBtn.classList.add("done");
+    dlLabel.textContent = "Downloading…";
+    dlIcon.innerHTML = '<path d="M20 6 9 17l-5-5"/>';
+    hint.textContent = "on its way. unzip → drag to Applications → hold ⌥ Space.";
+  });
+
+  /* ── hold-to-talk reflex: type while held, pause on release,
+     then watch the corrections happen in place ── */
+  const holdKey = document.getElementById("holdKey");
+  const fakePill = document.getElementById("fakePill");
+  const typedLine = document.getElementById("typedLine");
+  const legend = document.getElementById("diffLegend");
+  /* five demo sentences that rotate on every replay:
+     corrections = [raw word indices, replacement ("" = dropped)] */
+  const DEMOS = [
+    {
+      raw: "okay um so hey, can we move the standup to like two thirty tomorrow? um, thanks",
+      corrections: [
+        { idx: [0, 1, 2], to: "" },
+        { idx: [3], to: "Hey," },
+        { idx: [10], to: "" },
+        { idx: [11, 12], to: "2:30" },
+        { idx: [14], to: "" },
+        { idx: [15], to: "Thanks!" },
+      ],
+      caption: 'fillers dropped&ensp;·&ensp;"hey" → <b>Hey</b>&ensp;·&ensp;"two thirty" → <b>2:30</b>&ensp;·&ensp;punctuation cleaned',
+    },
+    {
+      raw: "um hey so the meeting got moved to like friday three pm i think",
+      corrections: [
+        { idx: [0], to: "" },
+        { idx: [1, 2], to: "Hey," },
+        { idx: [8], to: "" },
+        { idx: [9], to: "Friday" },
+        { idx: [10, 11, 12, 13], to: "3 PM, I think." },
+      ],
+      caption: 'filler dropped&ensp;·&ensp;"three pm" → <b>3 PM</b>&ensp;·&ensp;casing fixed&ensp;·&ensp;punctuation cleaned',
+    },
+    {
+      raw: "uh can you send me the invoice like today? thanks",
+      corrections: [
+        { idx: [0], to: "" },
+        { idx: [1], to: "Can" },
+        { idx: [7], to: "" },
+        { idx: [9], to: "Thanks!" },
+      ],
+      caption: 'fillers dropped&ensp;·&ensp;"can" → <b>Can</b>&ensp;·&ensp;thanks → <b>Thanks!</b>',
+    },
+    {
+      raw: "okay so so great catching up with you today, man lets do this again soon",
+      corrections: [
+        { idx: [0, 1, 2], to: "" },
+        { idx: [3], to: "Great" },
+        { idx: [9, 10], to: "man. Let's" },
+        { idx: [14], to: "soon." },
+      ],
+      caption: 'repeated words cleaned&ensp;·&ensp;"great" → <b>Great</b>&ensp;·&ensp;"lets" → <b>Let\'s</b>&ensp;·&ensp;punctuation cleaned',
+    },
+    {
+      raw: "hey um quick one, whats the status on the beta build? people are asking",
+      corrections: [
+        { idx: [0], to: "Hey," },
+        { idx: [1], to: "" },
+        { idx: [4], to: "what's" },
+        { idx: [11], to: "People" },
+        { idx: [13], to: "asking." },
+      ],
+      caption: 'filler dropped&ensp;·&ensp;"hey" → <b>Hey</b>&ensp;·&ensp;"whats" → <b>what\'s</b>&ensp;·&ensp;punctuation cleaned',
+    },
+  ];
+  let demoIdx = 0;
+  let RAW = DEMOS[demoIdx].raw;
+  let pos = 0, typer = null, phase = "idle", holding = false;
+  let lastTick = 0;
+
+  function caret() {
+    let c = typedLine.querySelector(".caret");
+    if (!c) { c = document.createElement("span"); c.className = "caret"; typedLine.appendChild(c); }
+    return c;
+  }
+
+  function reset() {
+    pos = 0; phase = "idle";
+    /* rotate to the next demo sentence for this fresh dictation */
+    demoIdx = (demoIdx + 1) % DEMOS.length;
+    RAW = DEMOS[demoIdx].raw;
+    typedLine.textContent = "";
+    document.querySelectorAll("canvas.particles").forEach((c) => c.remove());
+    legend.classList.remove("show");
+  }
+
+  function startHold() {
+    holding = true;
+    if (phase === "shimmer" || phase === "magic") return; // let the finale play out
+    holdKey.classList.add("holding");
+    fakePill.classList.remove("processing");
+    fakePill.classList.add("on");
+    if (phase === "done") reset();     // hold again = fresh dictation
+    if (phase === "idle") { phase = "raw"; typedLine.textContent = ""; }
+    caret();
+    clearInterval(typer);
+    lastTick = performance.now();
+    typer = setInterval(step, 30);
+  }
+
+  /* time-driven so throttled tabs catch up instead of crawling */
+  function step() {
+    if (!holding) return;              // released mid-sentence → frozen until re-held
+    const now = performance.now();
+    const chars = Math.max(1, Math.floor((now - lastTick) / 30));
+    lastTick = now;
+    for (let k = 0; k < chars && pos < RAW.length; k++) {
+      caret().before(document.createTextNode(RAW[pos++]));
+    }
+    if (pos >= RAW.length) finishTyping();
+  }
+
+  function finishTyping() {
+    clearInterval(typer); typer = null;
+    phase = "shimmer";
+    /* the pill gives one subtle loading shimmer, then pops away */
+    fakePill.classList.remove("on");
+    fakePill.classList.add("processing");
+    setTimeout(() => fakePill.classList.remove("processing"), 1000);
+    /* each correctable word breaks into dust and re-forms as its fix */
+    setTimeout(() => magicMorph(), 1150);
+  }
+
+  /* ── the particle edit: only the words that change burst into dust and
+     re-form as their corrections — the kept words never move ── */
+  function magicMorph() {
+    phase = "magic";
+    const docRect = typedLine.parentElement.getBoundingClientRect();
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+
+    // split the typed sentence into word spans
+    typedLine.textContent = "";
+    RAW.split(" ").forEach((w) => {
+      const sp = document.createElement("span");
+      sp.className = "w";
+      sp.textContent = w;
+      typedLine.appendChild(sp);
+      typedLine.appendChild(document.createTextNode(" "));
+    });
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(docRect.width * dpr);
+    cv.height = Math.round(docRect.height * dpr);
+    cv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+    typedLine.parentElement.appendChild(cv);
+    const ctx = cv.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const cs = getComputedStyle(typedLine);
+    const font = cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+    const words = [...typedLine.querySelectorAll(".w")];
+    const particles = [];
+
+    /* glyph pixel points for one word span, doc-relative */
+    function sampleWord(sp) {
+      const r = sp.getBoundingClientRect();
+      const w = Math.max(1, Math.ceil(r.width * dpr));
+      const h = Math.max(1, Math.ceil(r.height * dpr));
+      const t = document.createElement("canvas");
+      t.width = w; t.height = h;
+      const tc = t.getContext("2d");
+      tc.scale(dpr, dpr);
+      tc.font = font; tc.textBaseline = "middle"; tc.fillStyle = cs.color;
+      tc.fillText(sp.textContent, 0, r.height / 2);
+      const img = tc.getImageData(0, 0, w, h);
+      const pts = [];
+      const step = 3 * dpr;
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          if (img.data[(y * w + x) * 4 + 3] > 140) {
+            pts.push({ x: r.left - docRect.left + x / dpr, y: r.top - docRect.top + y / dpr });
+          }
+        }
+      }
+      return pts;
+    }
+
+    /* pixel targets for a replacement string, doc-relative */
+    function samplePoints(text, rect) {
+      const meas = document.createElement("span");
+      meas.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font:" + font + ";";
+      meas.textContent = text;
+      document.body.appendChild(meas);
+      const w = Math.max(1, Math.ceil(meas.offsetWidth * dpr));
+      const h = Math.max(1, Math.ceil(meas.offsetHeight * dpr));
+      meas.remove();
+      const t = document.createElement("canvas");
+      t.width = w; t.height = h;
+      const tc = t.getContext("2d");
+      tc.scale(dpr, dpr);
+      tc.font = font; tc.textBaseline = "middle"; tc.fillStyle = "#fff";
+      tc.fillText(text, 0, h / (2 * dpr));
+      const img = tc.getImageData(0, 0, w, h);
+      const pts = [];
+      const step = 3 * dpr;
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          if (img.data[(y * w + x) * 4 + 3] > 140) {
+            pts.push({ x: rect.left - docRect.left + x / dpr, y: rect.top - docRect.top + y / dpr });
+          }
+        }
+      }
+      return pts;
+    }
+
+    /* each correction: [raw word indices, replacement ("" = dropped)] */
+    const CORRECTIONS = DEMOS[demoIdx].corrections;
+
+    CORRECTIONS.forEach((c, g) => {
+      const start = 250 + g * 170;
+      setTimeout(() => {
+        const srcs = c.idx.map((wi) => words[wi]);
+
+        /* glyph pixels of the old words, sampled before anything moves */
+        const srcPts = srcs.map((sp) => sampleWord(sp));
+
+        /* insert the replacement, then collapse the old words + their spaces */
+        let fixEl = null;
+        if (c.to) {
+          const last = srcs[srcs.length - 1];
+          fixEl = document.createElement("span");
+          fixEl.className = "fix-in";
+          fixEl.textContent = c.to;
+          last.after(fixEl, document.createTextNode(" "));
+        }
+        srcs.forEach((sp) => {
+          const next = sp.nextSibling;
+          if (next && next.nodeType === 3 && next.textContent === " ") next.remove();
+          sp.style.display = "none";
+        });
+
+        /* replacement targets sampled from the settled layout */
+        const targets = fixEl ? samplePoints(c.to, fixEl.getBoundingClientRect()) : null;
+
+        /* dust flies from the old glyphs to the new ones (or scatters) */
+        let n = 0;
+        srcPts.forEach((pts) => {
+          pts.forEach((pt) => {
+            const tg = targets ? targets[n % targets.length] : null;
+            if (tg) {
+              /* converge: dust flies into the replacement's glyphs, turning amber */
+              particles.push({
+                x: pt.x, y: pt.y,
+                vx: (tg.x - pt.x) / 26, vy: (tg.y - pt.y) / 26,
+                s: 1.3, c: "242,193,78",
+                life: 0.62, decay: 0.024, start: 0,
+              });
+            } else {
+              /* dropped: the dust scatters slightly and fades */
+              particles.push({
+                x: pt.x, y: pt.y,
+                vx: (Math.random() - 0.5) * 0.7,
+                vy: -(0.1 + Math.random() * 0.5),
+                s: 0.9 + Math.random() * 1.1, c: "251,245,233",
+                life: 0.4 + Math.random() * 0.25, decay: 0.045, start: 0,
+              });
+            }
+            n += 1;
+          });
+        });
+
+        if (fixEl) {
+          void fixEl.offsetWidth;
+          fixEl.classList.add("show");
+        }
+      }, start);
+    });
+
+    /* the caption lands once every correction has settled */
+    const lastStart = 250 + (CORRECTIONS.length - 1) * 170;
+    setTimeout(() => {
+      legend.innerHTML = DEMOS[demoIdx].caption;
+      legend.classList.add("show");
+      phase = "done";
+    }, lastStart + 1250);
+  }
+
+  function endHold() {
+    if (!holding) return;
+    holding = false;
+    holdKey.classList.remove("holding");
+    fakePill.classList.remove("on");
+    clearInterval(typer); typer = null; // pauses mid-typing; next hold resumes
+  }
+  holdKey.addEventListener("mousedown", startHold);
+  holdKey.addEventListener("touchstart", (e) => { e.preventDefault(); startHold(); }, { passive: false });
+  ["mouseup", "touchend", "touchcancel"].forEach(ev =>
+    window.addEventListener(ev, endHold));
+  holdKey.addEventListener("keydown", (e) => {
+    if ((e.key === " " || e.key === "Spacebar") && !e.repeat) { e.preventDefault(); startHold(); }
+  });
+  holdKey.addEventListener("keyup", (e) => {
+    if (e.key === " " || e.key === "Spacebar") endHold();
+  });
+
+  /* ── scroll reveals ── */
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      en.target.classList.add("in");
+      io.unobserve(en.target);
+    });
+  }, { threshold: 0.18 });
+  document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+
+  /* ── theme: light / auto / dark — control lives in the footer ── */
+  const savedTheme = localStorage.getItem("theme") || "auto";
+  const mqDark = matchMedia("(prefers-color-scheme: dark)");
+
+  function applyTheme(mode) {
+    const sys = mqDark.matches ? "dark" : "light";
+    const eff = mode === "auto" ? sys : mode;
+    document.documentElement.dataset.theme = eff;
+    document.querySelectorAll(".theme-btn").forEach((b) =>
+      b.classList.toggle("active", b.dataset.set === mode));
+  }
+  applyTheme(savedTheme);
+  mqDark.addEventListener("change", () => {
+    if ((localStorage.getItem("theme") || "auto") === "auto") applyTheme("auto");
+  });
+  document.querySelectorAll(".theme-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      localStorage.setItem("theme", b.dataset.set);
+      applyTheme(b.dataset.set);
+    }));
+
+  /* ── rolling headline: fires when the reflex section arrives ── */
+  const reflex = document.querySelector(".reflex");
+  new IntersectionObserver((entries, obs) => {
+    entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      reflex.classList.add("rolled");
+      obs.disconnect();
+    });
+  }, { threshold: 0.3 }).observe(reflex);
+</script>
+</body>
+</html>
