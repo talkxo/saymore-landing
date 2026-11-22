@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "build": 21,
+  "build": 22,
   "url": "https://talkxo.github.io/saymore-landing/Saymore.zip",
-  "notes": "A new glass recorder key, History you can search and fix a word in, a simpler setup, better learning of names, and a download half the size that runs on every Apple Silicon Mac."
+  "notes": "Fixes a long dictation being pasted as one word with no spaces in some message boxes."
 }
