@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "build": 20,
+  "build": 21,
   "url": "https://talkxo.github.io/saymore-landing/Saymore.zip",
-  "notes": "Saymore now tells you when it heard no speech, and rests properly when idle."
+  "notes": "A new glass recorder key, History you can search and fix a word in, a simpler setup, better learning of names, and a download half the size that runs on every Apple Silicon Mac."
 }
