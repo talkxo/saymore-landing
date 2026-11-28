@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Saymore</title>
+    <item>
+      <title>Saymore 1.2</title>
+      <pubDate>Sat, 28 Nov 2026 10:59:13 +0000</pubDate>
+      <sparkle:version>23</sparkle:version>
+      <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[Improvements and fixes.]]></description>
+      <enclosure url="https://talkxo.github.io/saymore-landing/Saymore.zip" sparkle:edSignature="WBSVL0X9EoBIcLhZaoF/VTaCrOQMvxckRMA32fpUyq1eipx4Vz5JVprI1sIoSxhZyG0eOLpEVvPT6HvOJXWRDw==" length="15852928" type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>

@@ -1,6 +1,6 @@
 {
-  "version": "1.1",
-  "build": 22,
+  "version": "1.2",
+  "build": 23,
   "url": "https://talkxo.github.io/saymore-landing/Saymore.zip",
-  "notes": "Fixes a long dictation being pasted as one word with no spaces in some message boxes."
+  "notes": "Hindi and 28 more languages, a second shortcut you can give a job (translate, another language, a sticky note), and updates that install themselves."
 }
